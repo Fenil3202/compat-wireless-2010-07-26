@@ -1,0 +1,44 @@
+
+This patch is required because now pm-qos has 3 different flavors:
+
+On kernels >= 2.6.36 the pm qos req is kzalloc()'d by pm-qos itself
+On kernel   = 2.6.35 the pm qos req uses the stack
+On kernels <  2.6.35 the pm qos req is pegged to a unique name
+
+On newer kernels we don't use a name to tag a pm-qos requirement, and on
+older kernels we do. Although we can port over the struct pm_qos_request_list
+to older kernels it provides no variable with any unique name we can use
+for older kernels. Perhaps there's a way.. right now I just don't see it.
+
+We also should probably not bother updating pm-qos to newer versions unless 
+we are willing to treat the oldest kernels as newer ones and that'd be a
+little wierd.
+
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -590,7 +590,11 @@ void ieee80211_recalc_ps(struct ieee8021
+ 		s32 beaconint_us;
+ 
+ 		if (latency < 0)
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+ 			latency = pm_qos_request(PM_QOS_NETWORK_LATENCY);
++#else
++			latency = pm_qos_requirement(PM_QOS_NETWORK_LATENCY);
++#endif
+ 
+ 		beaconint_us = ieee80211_tu_to_usec(
+ 					found->vif.bss_conf.beacon_int);
+--- a/net/mac80211/scan.c
++++ b/net/mac80211/scan.c
+@@ -510,7 +510,11 @@ static int ieee80211_scan_state_decision
+ 		bad_latency = time_after(jiffies +
+ 				ieee80211_scan_get_channel_time(next_chan),
+ 				local->leave_oper_channel_time +
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+ 				usecs_to_jiffies(pm_qos_request(PM_QOS_NETWORK_LATENCY)));
++#else
++				usecs_to_jiffies(pm_qos_requirement(PM_QOS_NETWORK_LATENCY)));
++#endif
+ 
+ 		listen_int_exceeded = time_after(jiffies +
+ 				ieee80211_scan_get_channel_time(next_chan),
